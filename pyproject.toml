@@ -6,6 +6,7 @@ authors = ["scx1332 <sieciech.czajka@golem.network>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
+aiohttp = "^3.9"
 python = "^3.10"
 
 [tool.poetry.dev-dependencies]
@@ -23,6 +24,7 @@ checks_codestyle = { sequence = [
 ], help = "Run only code style checks" }
 _checks_codestyle_flake8 = "flake8"
 _checks_codestyle_black = "black --check --diff ."
+test = "pytest -svx ."
 
 [build-system]
 requires = ["poetry-core"]
