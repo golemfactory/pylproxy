@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "pylproxy"
+version = "0.1.0"
+description = ""
+authors = ["scx1332 <sieciech.czajka@golem.network>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.1"
+pytest-asyncio = "^0.17.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
