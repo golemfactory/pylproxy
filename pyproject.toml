@@ -9,8 +9,20 @@ readme = "README.md"
 python = "^3.10"
 
 [tool.poetry.dev-dependencies]
+black = "^24.4"
+flake8 = "^7.0"
+poethepoet = "^0.25"
 pytest = "^8.1"
 pytest-asyncio = "^0.17.0"
+
+
+[tool.poe.tasks]
+checks_codestyle = { sequence = [
+    "_checks_codestyle_flake8",
+    "_checks_codestyle_black",
+], help = "Run only code style checks" }
+_checks_codestyle_flake8 = "flake8"
+_checks_codestyle_black = "black --check --diff ."
 
 [build-system]
 requires = ["poetry-core"]
