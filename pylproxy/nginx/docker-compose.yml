@@ -1,7 +1,23 @@
 services:
-  nginx:
+  requestor:
+    build:
+      context: yagna
+      dockerfile: Dockerfile
+      args:
+        - YAGNA_VERSION=v0.15.0
+    ports:
+      - "6001:6000"
+    command: yagna service run
+    env_file:
+      - node_env.env
+    environment:
+      - NODE_NAME=dock_prov_0
+  proxy-nginx:
     build:
         context: .
         dockerfile: Dockerfile
     ports:
-        - "6000:6000"
+      - "16001-16005:6001-6005"
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
