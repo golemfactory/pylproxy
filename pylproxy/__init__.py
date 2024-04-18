@@ -34,7 +34,8 @@ class PylProxy:
     def __repr__(self):
         return "PylProxy()"
 
-    async def handle(self, request):
+    async def handle(self, request: aiohttp.web_request.Request):
+        print(type(request))
         name = request.match_info.get('name', "Anonymous")
         pid = os.getpid()
         text = "{:.2f}: Hello {}! Process {} is treating you\n".format(time.time(), name, pid)
@@ -51,8 +52,18 @@ class PylProxy:
         self._logger.info(f"Server port: {server_port}")
         self._logger.info(f"Remote address: {remote_addr}")
 
-        req = request
-        #req.headers[CALLER_HEADER] = f"{remote_addr}:agent"
+
+        async with aiohttp.ClientSession() as session:
+            if request.has_body:
+                body = await request.read()
+            else:
+                body = None
+            req = session.request(request.method,
+                                  "http://127.0.0.1:6001" + request.raw_path,
+                                  headers=request.headers,
+                                  data=body)
+            async with req as resp:
+                return web.Response(headers=resp.headers, status=resp.status, body=await resp.read())
         #req.headers[CALLEE_HEADER] = f"{remote_addr}:daemon"
 
         #agent_node = self._node_names[remote_addr]
@@ -75,13 +86,17 @@ class PylProxy:
 
         return web.Response(text=text)
 
+
     async def start(self, host, port):
         app = web.Application()
         app.router.add_route('GET', '/{tail:.*}', lambda request: self.handle(request))
+        app.router.add_route('PUT', '/{tail:.*}', lambda request: self.handle(request))
+        app.router.add_route('POST', '/{tail:.*}', lambda request: self.handle(request))
+        app.router.add_route('DELETE', '/{tail:.*}', lambda request: self.handle(request))
 
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()
         self._site = aiohttp.web.TCPSite(runner, host, port)
         await self._site.start()
 
-        logger.info(f"Server started at http://{host}:{port}")
+        self._logger.info(f"Server started at http://{host}:{port}")
