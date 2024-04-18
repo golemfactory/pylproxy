@@ -6,7 +6,7 @@ services:
       args:
         - YAGNA_VERSION=v0.15.0
     ports:
-      - "6001:6000"
+      - "6004:6000"
     command: yagna service run
     env_file:
       - node_env.env

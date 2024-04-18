@@ -13,6 +13,8 @@ CALLER_HEADER = "X-Caller"
 CALLEE_HEADER = "X-Callee"
 
 YAGNA_REST_PORT = 6000
+HOST_REST_PORT_START = 6001
+HOST_REST_PORT_END = 6010
 
 
 class PylProxy:
@@ -52,6 +54,31 @@ class PylProxy:
         self._logger.info(f"Server port: {server_port}")
         self._logger.info(f"Remote address: {remote_addr}")
 
+        agent_node = self._node_names[remote_addr]
+
+        extra_headers = {}
+        protocol = "http"
+        if server_port == YAGNA_REST_PORT:
+            # This should be a request from an agent running in a yagna container
+            # calling that container's daemon. We route this request to that
+            # container's host-mapped daemon port.
+            host = "127.0.0.1"
+            port = self._name_to_port[agent_node]
+            extra_headers[CALLER_HEADER] = f"{agent_node}:agent"
+            extra_headers[CALLEE_HEADER] = f"{agent_node}:daemon"
+
+        elif HOST_REST_PORT_START <= server_port <= HOST_REST_PORT_END:
+            # This should be a request from an agent running on the Docker host
+            # calling a yagna daemon in a container. We use localhost as the address
+            # together with the original port, since each daemon has its API port
+            # mapped to a port on the host chosen from the specified range.
+            host = "127.0.0.1"
+            port = server_port
+            extra_headers[CALLER_HEADER] = f"{agent_node}:agent"
+            daemon_node = self._port_to_name[server_port]
+            extra_headers[CALLEE_HEADER] = f"{daemon_node}:daemon"
+        else:
+            return web.Response(status=400, text="Invalid server port")
 
         async with aiohttp.ClientSession() as session:
             if request.has_body:
@@ -59,7 +86,7 @@ class PylProxy:
             else:
                 body = None
             req = session.request(request.method,
-                                  "http://127.0.0.1:6001" + request.raw_path,
+                                  f"{protocol}://{host}:{port}{request.raw_path}",
                                   headers=request.headers,
                                   data=body)
             async with req as resp:
