@@ -1,5 +1,3 @@
-import os
-import time
 import aiohttp
 from aiohttp import web
 import logging
@@ -13,7 +11,6 @@ CALLEE_HEADER = "X-Callee"
 YAGNA_REST_PORT = 6000
 HOST_REST_PORT_START = 6001
 HOST_REST_PORT_END = 6010
-
 
 class PylProxy:
     def __init__(
@@ -39,28 +36,25 @@ class PylProxy:
         return "PylProxy()"
 
     async def handle(self, request: aiohttp.web_request.Request):
-        print(type(request))
-        name = request.match_info.get("name", "Anonymous")
-        pid = os.getpid()
-        text = "{:.2f}: Hello {}! Process {} is treating you\n".format(
-            time.time(), name, pid
-        )
-
-        self._logger.debug(
-            "incoming request {}, headers: {}".format(request, request.headers)
-        )
 
         # parse X-Server-Addr to get the server address
         server_addr = request.headers.get("X-Server-Addr", None)
         # parse X-Server-Port to get the server port
-        server_port = request.headers.get("X-Server-Port", None)
+        try:
+            server_port = int(request.headers.get("X-Server-Port", None))
+        except ValueError:
+            return web.Response(status=400, text=f"Invalid server port: {server_port}")
+
         # parse X-Remote-Addr to get the remote address
         remote_addr = request.headers.get("X-Remote-Addr", None)
-        self._logger.info(f"Server address: {server_addr}")
-        self._logger.info(f"Server port: {server_port}")
-        self._logger.info(f"Remote address: {remote_addr}")
+        self._logger.debug(f"Server address: {server_addr}")
+        self._logger.debug(f"Server port: {server_port}")
+        self._logger.debug(f"Remote address: {remote_addr}")
 
-        agent_node = self._node_names[remote_addr]
+        try:
+            agent_node = self._node_names[remote_addr]
+        except KeyError:
+            return web.Response(status=400, text=f"Remote addr: {remote_addr} not found in mapping")
 
         extra_headers = {}
         protocol = "http"
@@ -81,7 +75,10 @@ class PylProxy:
             host = "127.0.0.1"
             port = server_port
             extra_headers[CALLER_HEADER] = f"{agent_node}:agent"
-            daemon_node = self._port_to_name[server_port]
+            try:
+                daemon_node = self._port_to_name[server_port]
+            except KeyError:
+                return web.Response(status=400, text=f"Server port {server_port} not found in mapping")
             extra_headers[CALLEE_HEADER] = f"{daemon_node}:daemon"
         else:
             return web.Response(status=400, text="Invalid server port")
@@ -91,16 +88,29 @@ class PylProxy:
                 body = await request.read()
             else:
                 body = None
+            self._logger.info(
+                "forwarding request {}, headers: {} - data: {}".format(request, request.headers, body)
+            )
+
+            target_url = f"{protocol}://{host}:{port}{request.raw_path}"
             req = session.request(
                 request.method,
-                f"{protocol}://{host}:{port}{request.raw_path}",
+                target_url,
                 headers=request.headers,
                 data=body,
             )
-            async with req as resp:
-                return web.Response(
-                    headers=resp.headers, status=resp.status, body=await resp.read()
-                )
+            try:
+                async with req as resp:
+                    response = web.Response(
+                        headers=resp.headers, status=resp.status, body=await resp.read()
+                    )
+                    self._logger.info(f"Request from {extra_headers[CALLER_HEADER]} "
+                                      f"for {server_addr}:{server_port}{request.raw_path} "
+                                      f"routed to {extra_headers[CALLEE_HEADER]} at {host}:{port}")
+                    return response
+            except aiohttp.ClientConnectionError as e:
+                return web.Response(status=400, text=f"Client connection error: {e} when calling: {target_url}")
+
         # req.headers[CALLEE_HEADER] = f"{remote_addr}:daemon"
 
         # agent_node = self._node_names[remote_addr]
@@ -121,7 +131,7 @@ class PylProxy:
                 req.port,
             )
 
-        return web.Response(text=text)
+        return web.Response(status=400, text="NOT OK")
 
     async def start(self, host, port):
         app = web.Application()
