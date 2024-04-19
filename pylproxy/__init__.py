@@ -142,9 +142,15 @@ class PylProxy:
             "DELETE", "/{tail:.*}", lambda request: self.handle(request)
         )
 
-        runner = aiohttp.web.AppRunner(app)
-        await runner.setup()
-        self._site = aiohttp.web.TCPSite(runner, host, port)
+        self._runner = aiohttp.web.AppRunner(app)
+        await self._runnerrunner.setup()
+        self._site = aiohttp.web.TCPSite(self._runner, host, port)
         await self._site.start()
 
         self._logger.info(f"Server started at http://{host}:{port}")
+
+    async def stop(self):
+        self._logger.info("Server stopping...")
+        await self._site.stop()
+        await self._runner.shutdown()
+        self._logger.info("Server stopped")
