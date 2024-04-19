@@ -143,7 +143,7 @@ class PylProxy:
         )
 
         self._runner = aiohttp.web.AppRunner(app)
-        await self._runnerrunner.setup()
+        await self._runner.setup()
         self._site = aiohttp.web.TCPSite(self._runner, host, port)
         await self._site.start()
 
