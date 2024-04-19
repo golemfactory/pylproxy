@@ -16,6 +16,7 @@ class PylProxy:
     def __init__(
         self, node_names: Mapping[str, str], ports: Mapping[str, Mapping[int, int]]
     ):
+        self._request_count = 0
         self._logger = logger
         self._logger.info(f"Creating PylProxy: {node_names}, {ports}")
         self._node_names = node_names
@@ -36,7 +37,8 @@ class PylProxy:
         return "PylProxy()"
 
     async def handle(self, request: aiohttp.web_request.Request):
-
+        self._request_count += 1
+        request_no = self._request_count - 1
         # parse X-Server-Addr to get the server address
         server_addr = request.headers.get("X-Server-Addr", None)
         # parse X-Server-Port to get the server port
@@ -83,6 +85,7 @@ class PylProxy:
         else:
             return web.Response(status=400, text="Invalid server port")
 
+
         async with aiohttp.ClientSession() as session:
             if request.has_body:
                 body = await request.read()
@@ -93,12 +96,20 @@ class PylProxy:
             )
 
             target_url = f"{protocol}://{host}:{port}{request.raw_path}"
+
+            for header in request.headers:
+                if header not in extra_headers:
+                    extra_headers[header] = request.headers[header]
+
             req = session.request(
                 request.method,
                 target_url,
-                headers=request.headers,
+                headers=extra_headers,
                 data=body,
             )
+            if self._callback_request:
+                self._callback_request(request_no, req)
+
             try:
                 async with req as resp:
                     response = web.Response(
