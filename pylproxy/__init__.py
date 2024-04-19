@@ -107,6 +107,8 @@ class PylProxy:
                     self._logger.info(f"Request from {extra_headers[CALLER_HEADER]} "
                                       f"for {server_addr}:{server_port}{request.raw_path} "
                                       f"routed to {extra_headers[CALLEE_HEADER]} at {host}:{port}")
+                    if self._callback_response:
+                        self._callback_response(request_no, response)
                     return response
             except aiohttp.ClientConnectionError as e:
                 return web.Response(status=400, text=f"Client connection error: {e} when calling: {target_url}")
@@ -133,7 +135,7 @@ class PylProxy:
 
         return web.Response(status=400, text="NOT OK")
 
-    async def start(self, host, port):
+    async def start(self, host, port, callback_request=None, callback_response=None):
         app = web.Application()
         app.router.add_route("GET", "/{tail:.*}", lambda request: self.handle(request))
         app.router.add_route("PUT", "/{tail:.*}", lambda request: self.handle(request))
@@ -141,6 +143,8 @@ class PylProxy:
         app.router.add_route(
             "DELETE", "/{tail:.*}", lambda request: self.handle(request)
         )
+        self._callback_request = callback_request
+        self._callback_response = callback_response
 
         self._runner = aiohttp.web.AppRunner(app)
         await self._runner.setup()
