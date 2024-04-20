@@ -1,3 +1,5 @@
+import datetime
+
 import aiohttp
 from aiohttp import web
 import logging
@@ -113,6 +115,7 @@ class PylProxy:
                 "headers": extra_headers,
                 "content": body,
                 "path": request.raw_path,
+                "timestamp_start": datetime.datetime.now().timestamp(),
             }
             if self._callback_request:
                 self._callback_request(request_no, callback_request_obj)
