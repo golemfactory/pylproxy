@@ -107,8 +107,15 @@ class PylProxy:
                 headers=extra_headers,
                 data=body,
             )
+            callback_request_obj = {
+                "method": request.method,
+                "url": target_url,
+                "headers": extra_headers,
+                "content": body,
+                "path": request.raw_path,
+            }
             if self._callback_request:
-                self._callback_request(request_no, req)
+                self._callback_request(request_no, callback_request_obj)
 
             try:
                 async with req as resp:
@@ -119,7 +126,10 @@ class PylProxy:
                                       f"for {server_addr}:{server_port}{request.raw_path} "
                                       f"routed to {extra_headers[CALLEE_HEADER]} at {host}:{port}")
                     if self._callback_response:
-                        self._callback_response(request_no, response)
+                        self._callback_response(request_no, callback_request_obj, {
+                            "status_code": resp.status,
+                            "content": response.body,
+                        })
                     return response
             except aiohttp.ClientConnectionError as e:
                 return web.Response(status=400, text=f"Client connection error: {e} when calling: {target_url}")
