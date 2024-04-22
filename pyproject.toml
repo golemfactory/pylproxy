@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "pylproxy"
-version = "0.2.0"
-description = ""
+version = "0.2.1"
+description = "Proxy for use in Goth instead of mitmproxy"
 authors = ["scx1332 <sieciech.czajka@golem.network>"]
 readme = "README.md"
 
