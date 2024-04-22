@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pylproxy"
-version = "0.1.1"
+version = "0.2.0"
 description = ""
 authors = ["scx1332 <sieciech.czajka@golem.network>"]
 readme = "README.md"
@@ -13,9 +13,6 @@ python = "^3.10"
 black = "^24.4"
 flake8 = "^7.0"
 poethepoet = "^0.25"
-pytest = "^8.1"
-pytest-asyncio = "^0.17.0"
-
 
 [tool.poe.tasks]
 checks_codestyle = { sequence = [
