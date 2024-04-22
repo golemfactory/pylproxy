@@ -56,7 +56,9 @@ class PylProxy:
         try:
             server_port = int(server_port_str)
         except ValueError:
-            return web.Response(status=400, text=f"Invalid server port: {server_port_str}")
+            return web.Response(
+                status=400, text=f"Invalid server port: {server_port_str}"
+            )
 
         # parse X-Remote-Addr to get the remote address
         remote_addr = request.headers.get("X-Remote-Addr", None)
@@ -148,7 +150,10 @@ class PylProxy:
                     if response.body is not None:
                         if not isinstance(response.body, bytes):
                             return web.Response(
-                                status=400, text="Response body must be bytes, not {}".format(type(body))
+                                status=400,
+                                text="Response body must be bytes, not {}".format(
+                                    type(body)
+                                ),
                             )
                     self._logger.info(
                         f"Request from {extra_headers[CALLER_HEADER]} "
@@ -171,8 +176,8 @@ class PylProxy:
                     status=400,
                     text=f"Client connection error: {e} when calling: {target_url}",
                 )
-
-        return web.Response(status=400, text="NOT OK")
+        assert False, "Should not reach here"
+        # should not reach here
 
     async def start(
         self,
