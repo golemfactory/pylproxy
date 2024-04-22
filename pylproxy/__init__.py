@@ -154,6 +154,7 @@ class PylProxy:
                         response_body += line
                         await response.write(line)
 
+                    await response.write_eof()
                     self._logger.info(
                         f"Request from {extra_headers[CALLER_HEADER]} "
                         f"for {server_addr}:{server_port}{request.raw_path} "
