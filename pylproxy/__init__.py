@@ -145,18 +145,15 @@ class PylProxy:
 
             try:
                 async with req as resp:
-                    response = web.Response(
-                        headers=resp.headers, status=resp.status, body=await resp.read()
+                    response = web.StreamResponse(
+                        headers=resp.headers, status=resp.status
                     )
-                    if response.body is not None:
-                        if not isinstance(response.body, bytes):
-                            return web.Response(
-                                status=400,
-                                text="Response body must be bytes, not {}".format(
-                                    type(body)
-                                ),
-                            )
-                    response_body: bytes | None = response.body
+                    await response.prepare(request)
+                    response_body = b""
+                    async for line in resp.content:
+                        response_body += line
+                        await response.write(line)
+
                     self._logger.info(
                         f"Request from {extra_headers[CALLER_HEADER]} "
                         f"for {server_addr}:{server_port}{request.raw_path} "
