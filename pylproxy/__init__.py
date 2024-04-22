@@ -1,4 +1,4 @@
-import datetime
+import time
 
 import aiohttp
 from aiohttp import web
@@ -118,6 +118,7 @@ class PylProxy:
                 if header not in extra_headers:
                     extra_headers[header] = request.headers[header]
 
+            timestamp_start = time.time()
             req = session.request(
                 request.method,
                 target_url,
@@ -135,7 +136,7 @@ class PylProxy:
                 "headers": extra_headers,
                 "content": body,
                 "path": request.raw_path,
-                "timestamp_start": datetime.datetime.now().timestamp(),
+                "timestamp_start": timestamp_start,
             }
             check_types_request(callback_request_obj)
 
@@ -155,6 +156,7 @@ class PylProxy:
                                     type(body)
                                 ),
                             )
+                    response_body: bytes | None = response.body
                     self._logger.info(
                         f"Request from {extra_headers[CALLER_HEADER]} "
                         f"for {server_addr}:{server_port}{request.raw_path} "
@@ -163,21 +165,21 @@ class PylProxy:
                     if self._callback_response:
                         callback_response_obj: ResponseCallbackObj = {
                             "status_code": resp.status,
-                            "content": response.body,
+                            "content": response_body,
+                            "timestamp_end": time.time(),
                         }
                         check_types_request(callback_request_obj)
 
                         self._callback_response(
                             request_no, callback_request_obj, callback_response_obj
                         )
-                    return response
             except aiohttp.ClientConnectionError as e:
                 return web.Response(
                     status=400,
                     text=f"Client connection error: {e} when calling: {target_url}",
                 )
-        assert False, "Should not reach here"
-        # should not reach here
+
+        return response
 
     async def start(
         self,

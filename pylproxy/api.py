@@ -13,6 +13,7 @@ class RequestCallbackObj(TypedDict):
 class ResponseCallbackObj(TypedDict):
     status_code: int
     content: Optional[bytes]
+    timestamp_end: float
 
 
 def check_types_request(request: RequestCallbackObj):
