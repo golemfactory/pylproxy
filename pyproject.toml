@@ -22,7 +22,7 @@ checks_codestyle = { sequence = [
     "_checks_codestyle_flake8",
     "_checks_codestyle_black",
 ], help = "Run only code style checks" }
-_checks_codestyle_flake8 = "flake8 --max-line-length 150"
+_checks_codestyle_flake8 = "flake8 --max-line-length 100"
 _checks_codestyle_black = "black --check --diff ."
 test = "pytest -svx ."
 

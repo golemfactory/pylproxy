@@ -3,7 +3,9 @@ import datetime
 import aiohttp
 from aiohttp import web
 import logging
-from typing import Mapping
+from typing import Mapping, Callable, Optional
+
+from pylproxy.api import ResponseCallbackObj, check_types_request, RequestCallbackObj
 
 logger = logging.getLogger(__name__)
 
@@ -14,10 +16,15 @@ YAGNA_REST_PORT = 6000
 HOST_REST_PORT_START = 6001
 HOST_REST_PORT_END = 6010
 
+
 class PylProxy:
     def __init__(
         self, node_names: Mapping[str, str], ports: Mapping[str, Mapping[int, int]]
     ):
+        self._site = None
+        self._runner = None
+        self._callback_response = None
+        self._callback_request = None
         self._request_count = 0
         self._logger = logger
         self._logger.info(f"Creating PylProxy: {node_names}, {ports}")
@@ -32,7 +39,8 @@ class PylProxy:
                 assert host_port not in self._port_to_name
                 self._port_to_name[host_port] = name
         self._logger.info(
-            f"PylProxy created with _port_to_name: {self._port_to_name}, _name_to_port: {self._name_to_port}"
+            f"PylProxy created with _port_to_name: {self._port_to_name},"
+            f" _name_to_port: {self._name_to_port}"
         )
 
     def __repr__(self):
@@ -44,10 +52,11 @@ class PylProxy:
         # parse X-Server-Addr to get the server address
         server_addr = request.headers.get("X-Server-Addr", None)
         # parse X-Server-Port to get the server port
+        server_port_str = request.headers.get("X-Server-Port", None)
         try:
-            server_port = int(request.headers.get("X-Server-Port", None))
+            server_port = int(server_port_str)
         except ValueError:
-            return web.Response(status=400, text=f"Invalid server port: {server_port}")
+            return web.Response(status=400, text=f"Invalid server port: {server_port_str}")
 
         # parse X-Remote-Addr to get the remote address
         remote_addr = request.headers.get("X-Remote-Addr", None)
@@ -58,7 +67,9 @@ class PylProxy:
         try:
             agent_node = self._node_names[remote_addr]
         except KeyError:
-            return web.Response(status=400, text=f"Remote addr: {remote_addr} not found in mapping")
+            return web.Response(
+                status=400, text=f"Remote addr: {remote_addr} not found in mapping"
+            )
 
         extra_headers = {}
         protocol = "http"
@@ -70,7 +81,6 @@ class PylProxy:
             port = self._name_to_port[agent_node]
             extra_headers[CALLER_HEADER] = f"{agent_node}:agent"
             extra_headers[CALLEE_HEADER] = f"{agent_node}:daemon"
-
         elif HOST_REST_PORT_START <= server_port <= HOST_REST_PORT_END:
             # This should be a request from an agent running on the Docker host
             # calling a yagna daemon in a container. We use localhost as the address
@@ -82,11 +92,12 @@ class PylProxy:
             try:
                 daemon_node = self._port_to_name[server_port]
             except KeyError:
-                return web.Response(status=400, text=f"Server port {server_port} not found in mapping")
+                return web.Response(
+                    status=400, text=f"Server port {server_port} not found in mapping"
+                )
             extra_headers[CALLEE_HEADER] = f"{daemon_node}:daemon"
         else:
             return web.Response(status=400, text="Invalid server port")
-
 
         async with aiohttp.ClientSession() as session:
             if request.has_body:
@@ -94,7 +105,9 @@ class PylProxy:
             else:
                 body = None
             self._logger.info(
-                "forwarding request {}, headers: {} - data: {}".format(request, request.headers, body)
+                "forwarding request {}, headers: {} - data: {}".format(
+                    request, request.headers, body
+                )
             )
 
             target_url = f"{protocol}://{host}:{port}{request.raw_path}"
@@ -109,7 +122,12 @@ class PylProxy:
                 headers=extra_headers,
                 data=body,
             )
-            callback_request_obj = {
+            if body is not None:
+                if not isinstance(body, bytes):
+                    return web.Response(
+                        status=400, text="Body must be bytes, not {}".format(type(body))
+                    )
+            callback_request_obj: RequestCallbackObj = {
                 "method": request.method,
                 "url": target_url,
                 "headers": extra_headers,
@@ -117,6 +135,8 @@ class PylProxy:
                 "path": request.raw_path,
                 "timestamp_start": datetime.datetime.now().timestamp(),
             }
+            check_types_request(callback_request_obj)
+
             if self._callback_request:
                 self._callback_request(request_no, callback_request_obj)
 
@@ -125,41 +145,45 @@ class PylProxy:
                     response = web.Response(
                         headers=resp.headers, status=resp.status, body=await resp.read()
                     )
-                    self._logger.info(f"Request from {extra_headers[CALLER_HEADER]} "
-                                      f"for {server_addr}:{server_port}{request.raw_path} "
-                                      f"routed to {extra_headers[CALLEE_HEADER]} at {host}:{port}")
+                    if response.body is not None:
+                        if not isinstance(response.body, bytes):
+                            return web.Response(
+                                status=400, text="Response body must be bytes, not {}".format(type(body))
+                            )
+                    self._logger.info(
+                        f"Request from {extra_headers[CALLER_HEADER]} "
+                        f"for {server_addr}:{server_port}{request.raw_path} "
+                        f"routed to {extra_headers[CALLEE_HEADER]} at {host}:{port}"
+                    )
                     if self._callback_response:
-                        self._callback_response(request_no, callback_request_obj, {
+                        callback_response_obj: ResponseCallbackObj = {
                             "status_code": resp.status,
                             "content": response.body,
-                        })
+                        }
+                        check_types_request(callback_request_obj)
+
+                        self._callback_response(
+                            request_no, callback_request_obj, callback_response_obj
+                        )
                     return response
             except aiohttp.ClientConnectionError as e:
-                return web.Response(status=400, text=f"Client connection error: {e} when calling: {target_url}")
-
-        # req.headers[CALLEE_HEADER] = f"{remote_addr}:daemon"
-
-        # agent_node = self._node_names[remote_addr]
-
-        if 0:
-            self._logger.debug(
-                "Request from %s for %s:%d/%s routed to %s at %s:%d",
-                # request caller:
-                req.headers[CALLER_HEADER],
-                # original host, port and path:
-                server_addr,
-                server_port,
-                req.path,
-                # request recipient:
-                req.headers[CALLEE_HEADER],
-                # rewritten host and port:
-                req.host,
-                req.port,
-            )
+                return web.Response(
+                    status=400,
+                    text=f"Client connection error: {e} when calling: {target_url}",
+                )
 
         return web.Response(status=400, text="NOT OK")
 
-    async def start(self, host, port, callback_request=None, callback_response=None):
+    async def start(
+        self,
+        host: str,
+        port: int,
+        callback_request: Optional[Callable[[int, RequestCallbackObj], None]] = None,
+        callback_response: Optional[
+            Callable[[int, RequestCallbackObj, ResponseCallbackObj], None]
+        ] = None,
+    ):
+
         app = web.Application()
         app.router.add_route("GET", "/{tail:.*}", lambda request: self.handle(request))
         app.router.add_route("PUT", "/{tail:.*}", lambda request: self.handle(request))
