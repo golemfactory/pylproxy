@@ -14,7 +14,11 @@ def callback_request(request_no, request):
 
 def callback_response(request_no, request, response):
     logger.info(f"Response {request_no}: {response}")
-    logger.info("Response time: {:.1f}ms".format((response["timestamp_end"] - request["timestamp_start"]) * 1000.0))
+    logger.info(
+        "Response time: {:.1f}ms".format(
+            (response["timestamp_end"] - request["timestamp_start"]) * 1000.0
+        )
+    )
 
 
 async def test_pyl():
