@@ -150,9 +150,12 @@ class PylProxy:
                     )
                     await response.prepare(request)
                     response_body = b""
-                    async for line in resp.content:
-                        response_body += line
-                        await response.write(line)
+
+                    while True:
+                        chunk = await resp.content.read(50000)
+                        if not chunk:
+                            break
+                        await response.write(chunk)
 
                     await response.write_eof()
                     self._logger.info(
